@@ -5,17 +5,21 @@ req_timeout_s: 10
 wildcard_block: False
 
 # Cache directory
-cache: '.cache/bind_adblock'
+cache: '.cache/bind_rpz_builder'
 
 # Can be either NULL or NXDOMAIN
 blocking_mode: 'NXDOMAIN'
+
+# Ads and tracking. Phishing, malware and scam lists are in config-threat.yml,
+# built into a separate RPZ zone.
 
 # Blocklists
 # List of blocklists
 # Format:
 #   url: Link to blocklist
 #   file: Blocklist file
-#   format: domain or hosts, default: domain
+#   format: domain, hosts or infoblox, default: domain
+#   required: true to leave the zone as it is when the list is missing or empty
 lists:
   - file: 'blocklist.txt'
   - url: 'https://pgl.yoyo.org/as/serverlist.php?hostformat=nohtml&showintro=0'
@@ -40,31 +44,11 @@ lists:
   # Disconnect.me Ads
   - url: 'https://s3.amazonaws.com/lists.disconnect.me/simple_ad.txt'
 
-  # Polish CERT - https://www.cert.pl/ostrzezenia_phishing/
-  - url: 'https://hole.cert.pl/domains/domains.txt'
-
-  # Phishing Domains Blocklist
-  # https://gitlab.com/malware-filter/phishing-filter
-  - url: 'https://malware-filter.gitlab.io/malware-filter/phishing-filter-domains.txt'
-
-  # HaGeZi's Fake DNS Blocklist
-  - url: 'https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/fake-onlydomains.txt'
-
   # HaGeZi's Ultimate DNS Blocklist
   # https://github.com/hagezi/dns-blocklists?tab=readme-ov-file#fake
   - url: 'https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/ultimate-onlydomains.txt'
 
-  # InfobloxOpen Threat Intel
-  - url: 'https://raw.githubusercontent.com/infobloxopen/threat-intelligence/refs/heads/main/indicators/combined.csv'
-    format: infoblox
-
-  # Blocklist Project
-  - url: 'https://blocklistproject.github.io/Lists/malware.txt'
-    format: hosts
-  - url: 'https://blocklistproject.github.io/Lists/ransomware.txt'
-    format: hosts
-  - url: 'https://blocklistproject.github.io/Lists/scam.txt'
-    format: hosts
+  # Blocklist Project (ads; its malware, ransomware and scam lists are threats)
   - url: 'https://blocklistproject.github.io/Lists/ads.txt'
     format: hosts
 

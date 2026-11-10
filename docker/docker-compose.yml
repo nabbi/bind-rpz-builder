@@ -1,13 +1,13 @@
 ---
 services:
   updater:
-    container_name: adblock
+    container_name: bind-rpz-builder
     build:
       context: ..
       dockerfile: docker/Dockerfile
     volumes:
-      - 'bind9-zones:/bind-adblock'
-      # - '/var/bind:/bind-adblock'
+      - 'bind9-zones:/zones'
+      # - '/var/bind:/zones'
 
 volumes:
   bind9-zones:

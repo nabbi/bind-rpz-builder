@@ -1,0 +1,32 @@
+# Threat RPZ: phishing, malware and scam domains, kept apart from the ad and
+# tracking zone (config.yml) so it can be ordered first, logged and exempted
+# on its own.
+#
+#   update-zonefile.py --config config-threat.yml /etc/bind/db.rpz.threat rpz.threat
+#
+# The lists are the maps written by rspamd-threat-multimap
+# (https://github.com/nabbi/rspamd-threat-multimap): a domain per line, one
+# file per category, from the phishing and malware feeds and the vendor IOC
+# repositories (Talos, Unit 42, ESET, Bitdefender, Sophos, Zscaler,
+# Netskope). It drops shared hosts (drive.google.com, github.com, t.me, ...)
+# that IOC lists name as a payload URL, which must not be blocked outright.
+# Run its `update` first; point output_dir in its config.toml at the
+# directory below.
+
+req_timeout_s: 10
+
+# A listed name blocks everything under it, as rspamd-threat-multimap matches
+wildcard_block: True
+
+cache: '.cache/bind_rpz_builder'
+
+blocking_mode: 'NXDOMAIN'
+
+lists:
+  - file: '/var/lib/threat-multimap/malware.map'
+    required: true
+  - file: '/var/lib/threat-multimap/phishing.map'
+    required: true
+  - file: '/var/lib/threat-multimap/fraud.map'
+
+domain_whitelist: []

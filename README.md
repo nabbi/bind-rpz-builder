@@ -1,165 +1,38 @@
-# BIND ad blocker
+# bind-rpz-builder
 
-Fetch various blocklists and generate a BIND zone from them.
+Builds BIND [response policy zones](https://en.wikipedia.org/wiki/Response_policy_zone)
+(RPZ) from public blocklists. Each zone has its own config file:
 
-Configure BIND to return `NXDOMAIN` for ad and tracking domains or optionally sinkhole them to `0.0.0.0`/`::` depending on configuration.
+| Zone | Config | Blocks |
+|---|---|---|
+| `rpz.adblock` | [`config.yml`](config.yml) | ads and tracking |
+| `rpz.threat` | [`config-threat.yml`](config-threat.yml) | phishing, malware, scams, from [rspamd-threat-multimap](https://github.com/nabbi/rspamd-threat-multimap) |
 
-Requires BIND 9.8 or newer for [RPZ](https://en.wikipedia.org/wiki/Response_policy_zone) support.
+A listed name gets `NXDOMAIN` (or `0.0.0.0` / `::`), optionally along with
+everything under it. The zone is checked with `named-checkzone` and loaded
+with `rndc reload`. Requires BIND 9.8+ and Python 3.
 
-Uses (by default) the following sources, as defined in `config.yml`:
-
-* Optional local blocklist file (`blocklist.txt`)
-* [Peter Lowe’s Ad and tracking server list](https://pgl.yoyo.org/adservers/)
-* [MVPS HOSTS](http://winhelp2002.mvps.org/)
-* [Adaway default blocklist](https://adaway.org/hosts.txt)
-* [Dan Pollock’s hosts file](https://www.someonewhocares.org/hosts/zero/)
-* [StevenBlack Unified hosts file](https://github.com/StevenBlack/hosts)
-* [Disconnect.me Basic tracking list](https://disconnect.me/trackerprotection)
-* [Disconnect.me Ad Filter list](https://disconnect.me/trackerprotection)
-* [Polish CERT Phishing list](https://www.cert.pl/ostrzezenia_phishing/)
-* [Phishing Domains Blocklist (malware-filter)](https://gitlab.com/malware-filter/phishing-filter)
-* [HaGeZi's Fake DNS Blocklist](https://github.com/hagezi/dns-blocklists)
-* [HaGeZi's Ultimate DNS Blocklist](https://github.com/hagezi/dns-blocklists)
-* [InfobloxOpen Threat Intelligence](https://github.com/infobloxopen/threat-intelligence)
-* [Blocklist Project (malware, ransomware, scam, ads)](https://blocklistproject.github.io/Lists/)
-
-See the supplied `config.yml` to view or modify the exact lists.
-
----
-
-## Setup
-
-### Python packages
-
-See **requirements.txt**.
-
-To install:
+## Quick start
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+
+.venv/bin/python update-zonefile.py /etc/bind/db.rpz.adblock rpz.adblock
+.venv/bin/python update-zonefile.py --config config-threat.yml /etc/bind/db.rpz.threat rpz.threat
 ```
 
----
+The first run creates the zone file and prints the `named.conf` lines to add.
 
-### Configuration (`config.yml`)
+## Docs
 
-The script is controlled by the `config.yml` file in the same directory.
-Common options include:
+- [Configuration](docs/configuration.md): config keys, list formats, the default ad lists
+- [Usage](docs/usage.md): options, scheduling
+- [BIND](docs/bind.md): `named.conf`, zone order, views, allowlisting
+- [Threat zone](docs/threat-zone.md): building `rpz.threat` from rspamd-threat-multimap
+- [Docker](docs/docker.md)
 
-* **req_timeout_s**: HTTP timeout for blocklist downloads
-* **wildcard_block**: If `true`, also block `*.domain.tld`
-* **cache**: Directory for downloaded lists and temporary files
-* **blocking_mode**:
+## License
 
-  * `NXDOMAIN` — return NXDOMAIN via `CNAME .`
-  * *any other value* — sinkhole mode (`A 0.0.0.0`, `AAAA ::`)
-* **lists**: Blocklists to load (each entry may be `url:` or `file:`) with optional `format:`:
-
-  * `domain` — one domain per line (default)
-  * `hosts` — hosts-format `IP domain`
-  * `infoblox` — Infoblox CSV, domain taken from second column
-* **domain_whitelist**: Domains that must never be blocked
-
-Review `config.yml` for active lists and format definitions.
-
----
-
-## Configure BIND
-
-Add the `response-policy` statement to BIND options:
-
-```bash
-// For AdBlock
-response-policy {
-    zone "rpz.example.com";
-};
-```
-
-Add your RPZ zone. Replace `example.com` with the domain of your choice.
-
-```bash
-// AdBlock
-zone "rpz.example.com" {
-    type master;
-    file "/etc/bind/db.rpz.example.com";
-    masterfile-format text;
-    allow-query { none; };
-};
-```
-
-Create the initial zone file for your RPZ:
-
-```text
-@ 3600 IN SOA @ admin.example.com. 0 86400 7200 2592000 86400
-@ 3600 IN NS LOCALHOST.
-```
-
-(Any valid NS record is acceptable.)
-
----
-
-## Usage
-
-```text
-usage: update-zonefile.py [-h] [--no-bind] [--raw] [--empty] [--views VIEWS]
-                          zonefile origin
-
-Update zone file from public DNS ad blocking lists
-
-positional arguments:
-  zonefile    path to zone file
-  origin      zone origin
-
-optional arguments:
-  -h, --help  show this help message and exit
-  --no-bind   Don't try to check/reload bind zone
-  --raw       Save the zone file in raw format. Requires named-compilezone
-  --empty     Create header-only (empty) rpz zone file
-  --views     If using multiple BIND views, list where each zone is defined
-```
-
-Example:
-
-```bash
-update-zonefile.py /etc/bind/db.rpz.example.com rpz.example.com
-```
-
-`update-zonefile.py` will update the zone file using the configured blocklists,
-validate it using `named-checkzone`, optionally restore SELinux file context if enforcing,
-and finally run:
-
-```bash
-rndc reload origin
-```
-
----
-
-### Multiple BIND Views
-
-If you defined the RPZ zone inside multiple views, pass a space‑separated list of those views:
-
-```bash
---views "internal dmz test"
-```
-
-The script will run `rndc reload origin IN view` for each provided view.
-
-If you forget this and the zone exists in multiple views, BIND will report:
-
-```text
-zone 'rpz.adblocker' was found in multiple views
-```
-
----
-
-## Whitelist
-
-You may whitelist domains by:
-
-* Adding them to `domain_whitelist` in `config.yml`, or
-* Creating a separate whitelist RPZ zone.
-
-See the project's Wiki page on **Whitelist** for details.
+MIT, see [LICENSE](LICENSE). Forked from
+[Trellmor/bind-adblock](https://github.com/Trellmor/bind-adblock)
+(Copyright (c) 2018 Daniel Triendl).

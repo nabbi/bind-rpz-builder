@@ -16,5 +16,5 @@ PATH=/usr/share/Modules/bin:/usr/lib64/ccache:/usr/local/sbin:/usr/local/bin:/us
 # run five minutes after 2am, every day
 # assumes your rpz domain file is /etc/bin/db.rpz.example.com and 
 # your rpz domain is named rpz.example.com in your BIND config
-5 2 * * * (cd /path/to/bind-adblock/bind-adblock-master; python3 ./update-zonefile.py /etc/bind/db.rpz.example.com rpz.example.com) > /dev/null 2>&1
+5 2 * * * (cd /path/to/bind-rpz-builder; python3 ./update-zonefile.py /etc/bind/db.rpz.example.com rpz.example.com) > /dev/null 2>&1
 

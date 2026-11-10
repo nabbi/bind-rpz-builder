@@ -48,28 +48,30 @@ from dns.exception import DNSException
 config = {
     "req_timeout_s": 10,
     "wildcard_block": False,
-    "cache": ".cache/bind_adblock",
+    "cache": ".cache/bind_rpz_builder",
     "blocking_mode": "NXDOMAIN",
     "lists": [],
     "domain_whitelist": [],
 }
 
 parent_dir = os.path.dirname(os.path.realpath(__file__))
-main_conf_file = Path(os.path.join(parent_dir, "config.yml"))
+default_conf_file = os.path.join(parent_dir, "config.yml")
 
-with main_conf_file.open("r", encoding="utf8") as fconfig:
-    config.update(yaml.safe_load(fconfig))
 
-config["cache"] = Path(config["cache"])
-if not config["cache"].is_absolute():
-    config["cache"] = Path(parent_dir, config["cache"])
+def load_config(conf_file):
+    with Path(conf_file).open("r", encoding="utf8") as fconfig:
+        config.update(yaml.safe_load(fconfig))
+
+    config["cache"] = Path(config["cache"])
+    if not config["cache"].is_absolute():
+        config["cache"] = Path(parent_dir, config["cache"])
 
 REGEX_DOMAIN = r"^\s*(?:(?:\d{1,3}\.){3}\d{1,3}|::1)\s+(?P<domain>([a-zA-Z0-9_-]+\.)+[a-zA-Z0-9_-]+)$"
 
 
 def download_list(url):
     headers = {
-        "User-Agent": "Bind adblock zonefile updater v1.0 (https://github.com/Trellmor/bind-adblock)",
+        "User-Agent": "bind-rpz-builder (+https://github.com/nabbi/bind-rpz-builder)",
     }
     cache = Path(config["cache"], hashlib.sha1(url.encode()).hexdigest())
 
@@ -125,6 +127,7 @@ def read_list(filename):
         with path.open("r", encoding="utf8") as flist:
             return flist.read()
 
+    print(f"List file not found: {filename}")
     return ""
 
 
@@ -140,6 +143,9 @@ def parse_lists(origin):
             data = download_list(l["url"])
         elif "file" in l:
             data = read_list(l["file"])
+
+        if not data and l.get("required"):
+            sys.exit(f"Required list {source_label} is missing or empty, zone not updated")
 
         if data:
             raw_lines = data.splitlines()
@@ -207,7 +213,7 @@ def parse_lists(origin):
 def load_zone(zonefile, origin, raw):
     zone_text = ""
     path = Path(zonefile)
-    tmppath = Path(config["cache"], "tempzone")
+    tmppath = temp_zone_path(origin)
 
     if not path.exists():
         with tmppath.open("w", encoding="utf8") as fzone:
@@ -252,6 +258,11 @@ def load_zone(zonefile, origin, raw):
                 break
 
     return dns.zone.from_text(zone_text, origin)
+
+
+def temp_zone_path(origin):
+    # One per origin, so builds of different zones sharing a cache don't collide
+    return Path(config["cache"], f"tempzone.{origin}")
 
 
 def update_serial(zone_name):
@@ -329,7 +340,7 @@ def append_domain_to_zonefile(file, domain):
 
 if __name__ == "__main__":
     parser = ArgumentParser(
-        description="Update zone file from public DNS ad blocking lists"
+        description="Build a BIND RPZ zone file from public blocklists"
     )
     parser.add_argument(
         "--no-bind",
@@ -355,9 +366,18 @@ if __name__ == "__main__":
         type=str,
         help="If using multiple BIND views, list where each zone is defined",
     )
+    parser.add_argument(
+        "-c",
+        "--config",
+        dest="config",
+        default=default_conf_file,
+        help="config file (default: config.yml next to this script)",
+    )
     parser.add_argument("zonefile", help="path to zone file")
     parser.add_argument("origin", help="zone origin")
     args = parser.parse_args()
+
+    load_config(os.path.abspath(args.config))
 
     os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
@@ -372,7 +392,7 @@ if __name__ == "__main__":
     else:
         domains = parse_lists(args.origin)
 
-    tmpzonefile = Path(config["cache"], "tempzone")
+    tmpzonefile = temp_zone_path(args.origin)
     zone.to_file(str(tmpzonefile))
 
     with tmpzonefile.open("a", encoding="utf8") as f:

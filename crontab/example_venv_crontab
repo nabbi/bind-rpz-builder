@@ -1,10 +1,16 @@
 #! /usr/bin/env bash
 
 (
-cd /opt/bind-adblock;
+cd /opt/bind-rpz-builder;
 source ./venv/bin/activate;
-python3 ./update-zonefile.py /var/bind/pri/rpz-adblocker.zone rpz.adblocker;
+python3 ./update-zonefile.py /var/bind/pri/rpz-adblock.zone rpz.adblock;
 deactivate
-) > /var/log/rpz-adblocker.log 2>&1
+) > /var/log/rpz-adblock.log 2>&1
 
 
+
+# Threat zone, from the rspamd-threat-multimap maps
+# (
+# cd /opt/bind-rpz-builder;
+# ./venv/bin/python3 ./update-zonefile.py --config config-threat.yml /var/bind/pri/rpz-threat.zone rpz.threat;
+# ) > /var/log/rpz-threat.log 2>&1

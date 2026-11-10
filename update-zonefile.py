@@ -51,6 +51,7 @@ config = {
     "cache": ".cache/bind_rpz_builder",
     "blocking_mode": "NXDOMAIN",
     "lists": [],
+    "exclude_lists": [],
     "domain_whitelist": [],
 }
 
@@ -195,6 +196,9 @@ def parse_lists(origin):
                     domain = line
 
                 domain = domain.strip()
+                if not domain.islower():
+                    # a new string only when needed: lists run to millions of lines
+                    domain = domain.lower()
                 if check_domain(domain, origin_name):
                     parsed.add(domain)
                     matched += 1
@@ -208,6 +212,78 @@ def parse_lists(origin):
 
     print(f"Total unique domains: {len(parsed)}\n")
     return parsed
+
+
+def suffixes(domain):
+    """The domain and each of its parents, longest first."""
+    labels = domain.split(".")
+    return [".".join(labels[i:]) for i in range(len(labels))]
+
+
+def drop_covered_subdomains(domains):
+    """With wildcard_block a name's *. record already blocks everything under
+    it, so a listed subdomain of another listed name is redundant."""
+    covered = [d for d in domains if any(p in domains for p in suffixes(d)[1:])]
+    domains.difference_update(covered)
+    print(f"Subdomains of listed names dropped: {len(covered)}")
+    return domains
+
+
+def iter_exclude_names(l):
+    """Names of an exclude list, a line at a time (files can be millions of
+    lines), without the validation the zone's own lists get."""
+    if "url" in l:
+        lines = download_list(l["url"]).splitlines()
+    else:
+        path = Path(l["file"])
+        if not path.is_file():
+            print(f"Exclude list not found: {l['file']}")
+            return
+        lines = path.open("r", encoding="utf8")
+
+    hosts = l.get("format", "domain") == "hosts"
+    try:
+        for line in lines:
+            line = re.sub(r"#.*$", "", line).strip()
+            if not line:
+                continue
+            if hosts:
+                m = re.match(REGEX_DOMAIN, line)
+                if not m:
+                    continue
+                line = m.group("domain")
+            yield line.lower().rstrip(".")
+    finally:
+        if hasattr(lines, "close"):
+            lines.close()
+
+
+def drop_excluded(domains):
+    """Drop names that exclude_lists cover: the name itself or, as those lists
+    are blocked with wildcards in another zone (rpz.threat), any parent.
+
+    Keeps memory to this zone's size: the exclude lists are streamed and only
+    names that are one of our domains or their parents are kept."""
+    if not config["exclude_lists"]:
+        return domains
+
+    ours = set()
+    for d in domains:
+        ours.update(suffixes(d))
+
+    hits = set()
+    for l in config["exclude_lists"]:
+        source_label = l.get("url") or l.get("file")
+        print(f"Excluding: {source_label}")
+        for name in iter_exclude_names(l):
+            if name in ours:
+                hits.add(name)
+    del ours
+
+    covered = [d for d in domains if any(p in hits for p in suffixes(d))]
+    domains.difference_update(covered)
+    print(f"Domains dropped as covered by exclude lists: {len(covered)}\n")
+    return domains
 
 
 def load_zone(zonefile, origin, raw):
@@ -391,6 +467,9 @@ if __name__ == "__main__":
         domains = set()
     else:
         domains = parse_lists(args.origin)
+        if config["wildcard_block"]:
+            domains = drop_covered_subdomains(domains)
+        domains = drop_excluded(domains)
 
     tmpzonefile = temp_zone_path(args.origin)
     zone.to_file(str(tmpzonefile))

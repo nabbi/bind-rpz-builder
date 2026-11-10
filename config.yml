@@ -52,5 +52,14 @@ lists:
   - url: 'https://blocklistproject.github.io/Lists/ads.txt'
     format: hosts
 
+# Leave out names (and everything under them) that these lists hold: the
+# threat zone's maps, as that zone is checked first and blocks them already.
+# Same entries as lists: url or file, format domain or hosts.
+exclude_lists: []
+#exclude_lists:
+#  - file: '/var/lib/threat-multimap/malware.map'
+#  - file: '/var/lib/threat-multimap/phishing.map'
+#  - file: '/var/lib/threat-multimap/fraud.map'
+
 # Don't block domains listed here
 domain_whitelist: []

@@ -7,10 +7,11 @@ paths are relative to the script's directory.
 | Key | Default | Meaning |
 |---|---|---|
 | `req_timeout_s` | `10` | HTTP timeout per download, seconds |
-| `wildcard_block` | `False` | also block `*.name`, i.e. everything under a listed name |
+| `wildcard_block` | `False` | also block `*.name`, i.e. everything under a listed name; names under another listed name are then dropped as redundant |
 | `cache` | `.cache/bind_rpz_builder` | downloaded lists (the last good copy) and temporary zone files |
 | `blocking_mode` | `NXDOMAIN` | `NXDOMAIN` answers `CNAME .`; any other value sinkholes to `A 0.0.0.0` / `AAAA ::` |
 | `lists` | `[]` | the blocklists, below |
+| `exclude_lists` | `[]` | names another zone already blocks, [below](#exclude-lists) |
 | `domain_whitelist` | `[]` | names never blocked (exact match) |
 
 ## Lists
@@ -28,6 +29,29 @@ Each entry has `url:` or `file:`, and optionally:
 `#` comments and inline comments are ignored. Downloads send
 `If-Modified-Since`; a failed download uses the cached copy. Names with
 `_` or that fail validation are skipped and reported.
+
+Names are compared lower-case, and a name in several lists is written once.
+
+## Exclude lists
+
+`exclude_lists` takes entries like `lists` (`url:` or `file:`, `format:`
+`domain` or `hosts`). A name they list, and everything under it, is left
+out of this zone: they are meant to be another zone's lists, blocked there
+with `wildcard_block`, that BIND checks first. The ad zone uses it to leave
+out what the [threat zone](threat-zone.md) blocks:
+
+```yaml
+exclude_lists:
+  - file: '/var/lib/threat-multimap/malware.map'
+  - file: '/var/lib/threat-multimap/phishing.map'
+  - file: '/var/lib/threat-multimap/fraud.map'
+```
+
+A missing exclude list is reported and skipped. The lists are read a line
+at a time and only names that match this zone are kept, so millions of
+excluded names cost little memory. The exclusion is as of this zone's
+build: a name the threat feeds drop goes back to being blocked as an ad
+at the ad zone's next build.
 
 ## Default ad and tracking lists (`config.yml`)
 

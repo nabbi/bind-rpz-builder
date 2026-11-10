@@ -39,14 +39,25 @@ is newer than the zone file.
 The maps are `required: true` in `config-threat.yml`: if one is missing,
 the zone is not replaced.
 
+## Overlap with the ad zone
+
+List `rpz.threat` before `rpz.adblock` in `response-policy`, so a name in
+both is answered (and logged) as a threat. To keep the ad zone from
+carrying those names too, give its config the maps as
+[`exclude_lists`](configuration.md#exclude-lists); `config.yml` has them
+commented out. Within the threat zone a name under another listed name is
+dropped, as the parent's wildcard already blocks it.
+
 ## Size
 
 Measured 2026-11-09:
 
-| Feeds | Names | Map update peak RAM | Zone records |
-|---|---:|---:|---:|
-| multimap example, plus the fraud feeds | ~237,000 | ~70 MB | ~475,000 |
-| the same, plus The Block List Project malware list | ~2,800,000 | ~630 MB | ~5,600,000 |
+| Feeds | Names | Map update peak RAM | Zone records | Zone build peak RAM | Left out of the ad zone |
+|---|---:|---:|---:|---:|---:|
+| multimap example, plus the fraud feeds | ~237,000 | ~70 MB | ~434,000 | | ~56,000 |
+| the same, plus The Block List Project malware list | ~2,800,000 | ~630 MB | ~5,170,000 | ~480 MB | ~181,000 |
 
-With `wildcard_block`, every name has two records, so the zone holds
-twice as many records as there are names.
+With `wildcard_block`, every name has two records, less the names under
+another listed name (~20,000 and ~223,000 here). The ad zone held ~476,000
+names before the exclusion; leaving the threat names out took its build to
+~160 MB peak.
